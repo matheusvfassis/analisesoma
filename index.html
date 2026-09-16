@@ -791,6 +791,14 @@ const RAW_DATA = {"lookups":{"cliente":["","2TENG SOLUCOES EM ENGENHARIA LTDA","
     const items = [];
     const totalPeso = sumPeso(rows);
 
+    if(isClasse1Only()){
+      const nomeInca = 'INCA-INCINERACAO E CONTROLE AMBIENTAL LTDA';
+      const incaLiquido = rows.filter(r => L.cliente[r[2]]===nomeInca && L.subtipo[r[6]]==='LÍQUIDO');
+      const pesoInca = sumPeso(incaLiquido);
+      const viagemTxto = incaLiquido.length===1 ? 'viagem' : 'viagens';
+      items.push(`<b>INCA</b> fez <b>${fmtInt(incaLiquido.length)}</b> ${viagemTxto} de líquido no período, totalizando <b>${fmtT(pesoInca)} t</b>.`);
+    }
+
     const porCliente = groupBy(rows, 2, L.cliente).sort((a,b)=>b.peso-a.peso);
     if(porCliente.length){
       const top = porCliente[0];
@@ -1120,8 +1128,8 @@ const RAW_DATA = {"lookups":{"cliente":["","2TENG SOLUCOES EM ENGENHARIA LTDA","
     const ctx = document.getElementById('chartC1Mensal');
     charts.c1mensal = new Chart(ctx, {
       data:{ labels, datasets:[
-        {type:'bar', label:'Nº de descartes', data:countData, backgroundColor: cssVar('--accent-other2'), yAxisID:'y1', borderRadius:1},
-        {type:'line', label:'Toneladas', data:pesoData, borderColor: cssVar('--accent-solid'), backgroundColor: cssVar('--accent-solid'), yAxisID:'y', tension:.3, pointRadius:3},
+        {type:'bar', label:'Toneladas', data:pesoData, backgroundColor: cssVar('--accent-solid'), yAxisID:'y', borderRadius:1},
+        {type:'line', label:'Nº de descartes', data:countData, borderColor: cssVar('--accent-other2'), backgroundColor: cssVar('--accent-other2'), yAxisID:'y1', tension:.3, pointRadius:3},
         {type:'line', label:'Média histórica (t)', data: months.map(()=>+avgPeso.toFixed(2)), borderColor: cssVar('--accent-warn'), borderDash:[6,4], pointRadius:0, yAxisID:'y'}
       ]},
       options:{
