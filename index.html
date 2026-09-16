@@ -995,7 +995,7 @@ const RAW_DATA = {"lookups":{"cliente":["","2TENG SOLUCOES EM ENGENHARIA LTDA","
     charts.c2turno = new Chart(ctx, {
       type:'bar',
       data:{ labels, datasets:[
-        {label:'Diurno (7h–17h)', data:diurnoData, backgroundColor: cssVar('--accent-solid'), borderRadius:1},
+        {label:'Diurno', data:diurnoData, backgroundColor: cssVar('--accent-solid'), borderRadius:1},
         {label:'Noturno', data:noturnoData, backgroundColor: cssVar('--ink-dim'), borderRadius:1}
       ]},
       options:{
@@ -1154,8 +1154,8 @@ const RAW_DATA = {"lookups":{"cliente":["","2TENG SOLUCOES EM ENGENHARIA LTDA","
     const ctx = document.getElementById('chartC1Liquidos');
     charts.c1liquidos = new Chart(ctx, {
       data:{ labels, datasets:[
-        {type:'bar', label:'Nº de descartes', data:countData, backgroundColor: cssVar('--accent-liquid'), yAxisID:'y1', borderRadius:1},
-        {type:'line', label:'Toneladas de líquidos', data:pesoData, borderColor: cssVar('--ink'), backgroundColor: cssVar('--ink'), yAxisID:'y', tension:.3, pointRadius:3}
+        {type:'bar', label:'Toneladas de líquidos', data:pesoData, backgroundColor: cssVar('--accent-liquid'), yAxisID:'y', borderRadius:1},
+        {type:'line', label:'Nº de descartes', data:countData, borderColor: cssVar('--ink'), backgroundColor: cssVar('--ink'), yAxisID:'y1', tension:.3, pointRadius:3}
       ]},
       options:{
         responsive:true, maintainAspectRatio:false, interaction:{mode:'index', intersect:false},
