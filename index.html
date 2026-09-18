@@ -655,7 +655,10 @@ const RAW_DATA = JSON.parse("{\"lookups\":{\"cliente\":[\"0S AMBIENTAL SPE LTDA.
 
   function compareLabel(){
     if(state.mode==='periodo' && state.compareMode==='ano' && state.compareYear) return `mesmo período em ${state.compareYear}`;
-    return 'período do mês anterior';
+    if(state.mode==='dia') return 'dia anterior';
+    if(state.mode==='mes') return 'mês anterior';
+    if(state.mode==='ano') return 'ano anterior';
+    return 'período anterior';
   }
 
   function deltaBadge(cur, prev){
