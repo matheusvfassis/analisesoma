@@ -91,6 +91,25 @@
   .chip.all{border-style:dashed;}
   .filter-hint{font-size:11px;color:var(--ink-dim);max-width:220px;line-height:1.4;align-self:flex-end;}
 
+  .cli-wrap{position:relative;}
+  .cli-list{position:absolute;left:0;top:calc(100% + 2px);z-index:50;width:max(100%,420px);max-width:90vw;
+    max-height:280px;overflow-y:scroll;background:var(--bg-panel);border:1px solid var(--ink-dim);
+    box-shadow:0 6px 18px rgba(0,0,0,.25);scrollbar-width:auto;scrollbar-color:var(--ink-dim) var(--bg);}
+  .cli-list::-webkit-scrollbar{width:12px;}
+  .cli-list::-webkit-scrollbar-track{background:var(--bg);}
+  .cli-list::-webkit-scrollbar-thumb{background:var(--ink-dim);border:2px solid var(--bg);}
+  .cli-opt{font-family:var(--mono);font-size:12px;padding:7px 10px;cursor:pointer;color:var(--ink);
+    border-bottom:1px solid var(--line);}
+  .cli-opt:hover,.cli-opt.hl{background:var(--ink);color:var(--bg);}
+  .cli-opt.todos{color:var(--ink-dim);font-style:italic;}
+  .cli-info{font-family:var(--mono);font-size:11px;padding:7px 10px;color:var(--ink-dim);}
+  .filter-group input.cli{font-family:var(--mono);font-size:12px;padding:6px 9px;border:1px solid var(--line);
+    background:var(--bg-panel);color:var(--ink);width:340px;max-width:100%;}
+  .filter-group input.cli.on{border-color:var(--ink);}
+  .cli-row{display:flex;gap:6px;align-items:center;}
+  .cli-clear{font-family:var(--mono);font-size:11px;padding:6px 10px;border:1px solid var(--line);
+    background:var(--bg-panel);color:var(--ink-dim);cursor:pointer;}
+  .cli-clear:hover{color:var(--ink);}
   .panel-classe-banner{
     display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;
     background:var(--bg-panel);border:1px solid var(--line);border-left:3px solid var(--accent-solid);
@@ -233,6 +252,16 @@
       <div class="fg-label">Estado físico</div>
       <div class="chips" id="chipsTipo"></div>
     </div>
+    <div class="filter-group">
+      <div class="fg-label">Cliente</div>
+      <div class="cli-row">
+        <div class="cli-wrap">
+          <input type="text" id="inputCliente" class="cli" placeholder="Todos os clientes ▾ (digite p/ buscar)" autocomplete="off">
+          <div class="cli-list" id="listaClientes" hidden></div>
+        </div>
+        <button type="button" class="cli-clear" id="limparCliente" style="display:none">limpar</button>
+      </div>
+    </div>
     <div class="filter-hint">clique para isolar uma categoria · Ctrl/Shift+clique para somar várias</div>
   </div>
 
@@ -360,7 +389,7 @@
     <div class="grid2 full">
       <div class="panel">
         <h3>% de líquidos x sólidos</h3>
-        <div class="sub">Em relação ao peso recebido — sólido + líquido = 100% (pastoso e outros ficam de fora)</div>
+        <div class="sub">Em relação ao peso recebido — sólido + líquido = 100% (pastoso e outros ficam de fora) · dentro de cada barra: % e toneladas do mês</div>
         <div class="chart-box tall"><canvas id="chartC1PctLiqSol"></canvas></div>
       </div>
     </div>
@@ -371,7 +400,7 @@
     <div class="panel-classe-banner">
       <div>
         <h3>Painel específico · Classe IIA</h3>
-        <div class="hint">Os gráficos mensais abaixo têm período próprio — independente do Dia/Mês/Período selecionado acima. Os gráficos por hora usam o dia selecionado ali em cima. Produtividade e diesel só contam dias registrados no app de eficiência do trator.</div>
+        <div class="hint">Os gráficos mensais abaixo têm período próprio — independente do Dia/Mês/Período selecionado acima. Os gráficos por hora usam o dia selecionado ali em cima. Produtividade e diesel só contam dias registrados no app de eficiência do trator e não são afetados pelo filtro de cliente (são dados da máquina).</div>
       </div>
       <div class="field">
         <input type="month" id="c2MesInicio">
@@ -454,6 +483,37 @@ const RAW_DATA = JSON.parse("{\"lookups\":{\"cliente\":[\"0S AMBIENTAL SPE LTDA.
   const ROWS = DATA.rows; // [date, hora, cliIdx, descIdx, classeIdx, tipoIdx, subtipoIdx, tonelada, tempoMin, caminhaoIdx, statusIdx]
   const MIN_DATE = DATA.meta.minDate, MAX_DATE = DATA.meta.maxDate;
 
+  // ---------- padronização dos nomes de cliente ----------
+  // Une variações de maiúsculas/minúsculas, acentos, pontuação, espaços e sufixos societários (LTDA, EIRELI, ME, EPP, S/A)
+  (function padronizarClientes(){
+    const orig = L.cliente;
+    const chave = (n) => {
+      if(n==null) return '';
+      let k = String(n).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[^A-Z0-9]+/g,' ').trim();
+      let prev;
+      do{ prev = k; k = k.replace(/ (LTDA|EIRELI|EPP|ME|SA|S A)$/,'').trim(); }while(k!==prev);
+      return k;
+    };
+    const cont = new Array(orig.length).fill(0);
+    for(let i=0;i<ROWS.length;i++) cont[ROWS[i][2]]++;
+    const grupos = new Map(); // chave -> {novoIdx, melhorOld, melhorCont}
+    const novos = [];
+    const mapa = new Array(orig.length);
+    for(let i=0;i<orig.length;i++){
+      const k = chave(orig[i]);
+      let g = grupos.get(k);
+      if(!g){ g = {idx: novos.length, best: i}; grupos.set(k, g); novos.push(null); }
+      else if(cont[i] > cont[g.best]) g.best = i;
+      mapa[i] = g.idx;
+    }
+    for(const g of grupos.values()){
+      const nm = orig[g.best];
+      novos[g.idx] = (nm==null || String(nm).trim()==='') ? '(SEM CLIENTE)' : String(nm).trim().replace(/\s+/g,' ').toUpperCase();
+    }
+    for(let i=0;i<ROWS.length;i++) ROWS[i][2] = mapa[ROWS[i][2]];
+    L.cliente = novos;
+  })();
+
   const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   const fmtT = (n) => n.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
   const fmtInt = (n) => n.toLocaleString('pt-BR');
@@ -472,10 +532,11 @@ const RAW_DATA = JSON.parse("{\"lookups\":{\"cliente\":[\"0S AMBIENTAL SPE LTDA.
   // ---------- state ----------
   let state = {
     mode:'dia', dia: MAX_DATE, mes: MAX_DATE.slice(0,7), inicio: MAX_DATE, fim: MAX_DATE, ano: MAX_DATE.slice(0,4),
-    classes: new Set(L.classe), estados: new Set(L.subtipo),
+    classes: new Set(L.classe), estados: new Set(L.subtipo), cliente: null,
     compareMode: 'anterior', // 'anterior' = período anterior equivalente · 'ano' = mesmo período de um ano específico (só no modo Período)
     compareYear: null
   };
+  const cliOk = (r) => state.cliente==null || r[2]===state.cliente;
   let tableState = { page:0, pageSize:50, search:'' };
   let charts = {};
 
@@ -537,6 +598,7 @@ const RAW_DATA = JSON.parse("{\"lookups\":{\"cliente\":[\"0S AMBIENTAL SPE LTDA.
     for(let i=0;i<ROWS.length;i++){
       const r = ROWS[i];
       if(r[0] < start || r[0] > end) continue;
+      if(state.cliente!=null && r[2]!==state.cliente) continue;
       if(exclude!=='classes' && !state.classes.has(L.classe[r[4]])) continue;
       if(exclude!=='estados' && !state.estados.has(L.subtipo[r[6]])) continue;
       out.push(r);
@@ -549,6 +611,7 @@ const RAW_DATA = JSON.parse("{\"lookups\":{\"cliente\":[\"0S AMBIENTAL SPE LTDA.
     for(let i=0;i<ROWS.length;i++){
       const r = ROWS[i];
       if(r[0] < start || r[0] > end) continue;
+      if(state.cliente!=null && r[2]!==state.cliente) continue;
       if(!state.classes.has(L.classe[r[4]])) continue;
       if(!state.estados.has(L.subtipo[r[6]])) continue;
       out.push(r);
@@ -651,6 +714,12 @@ const RAW_DATA = JSON.parse("{\"lookups\":{\"cliente\":[\"0S AMBIENTAL SPE LTDA.
     else if(state.mode==='mes') el.innerHTML = `Descartes de <span>${new Date(start+'T00:00:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'})}</span>`;
     else if(state.mode==='ano') el.innerHTML = `Descartes de <span>${state.ano}</span>`;
     else el.innerHTML = `Descartes de <span>${fmtDateBR(start)} até ${fmtDateBR(end)}</span>`;
+    if(state.cliente!=null){
+      const sfx = document.createElement('div');
+      sfx.style.cssText = 'font-size:14px;font-weight:500;color:var(--accent-liquid);margin-top:4px;';
+      sfx.textContent = 'Cliente: ' + (L.cliente[state.cliente]==null ? '(sem cliente)' : L.cliente[state.cliente]);
+      el.appendChild(sfx);
+    }
   }
 
   function compareLabel(){
@@ -1180,7 +1249,7 @@ const RAW_DATA = JSON.parse("{\"lookups\":{\"cliente\":[\"0S AMBIENTAL SPE LTDA.
   if(c2State.mesInicio < MIN_MONTH) c2State.mesInicio = MIN_MONTH;
 
   function computeC2Monthly(){
-    const rows = ROWS.filter(r => L.classe[r[4]]==='CLASSE IIA' && monthKey(r[0])>=c2State.mesInicio && monthKey(r[0])<=c2State.mesFim);
+    const rows = ROWS.filter(r => cliOk(r) && L.classe[r[4]]==='CLASSE IIA' && monthKey(r[0])>=c2State.mesInicio && monthKey(r[0])<=c2State.mesFim);
     const months = monthsRangeList(c2State.mesInicio, c2State.mesFim);
     const byMonth = {}; months.forEach(m=>byMonth[m]={peso:0,count:0,diurno:0,noturno:0});
     for(const r of rows){
@@ -1369,7 +1438,7 @@ const RAW_DATA = JSON.parse("{\"lookups\":{\"cliente\":[\"0S AMBIENTAL SPE LTDA.
 
   function computeC2Hora(){
     const dia = state.dia;
-    const rows = ROWS.filter(r => r[0]===dia && L.classe[r[4]]==='CLASSE IIA');
+    const rows = ROWS.filter(r => cliOk(r) && r[0]===dia && L.classe[r[4]]==='CLASSE IIA');
     const byHour = Array.from({length:24}, ()=>({peso:0, count:0, tempoSum:0, tempoCount:0}));
     for(const r of rows){
       if(r[1]<0 || r[1]>23) continue;
@@ -1547,7 +1616,7 @@ const RAW_DATA = JSON.parse("{\"lookups\":{\"cliente\":[\"0S AMBIENTAL SPE LTDA.
   if(c1State.mesInicio < MIN_MONTH) c1State.mesInicio = MIN_MONTH;
 
   function computeC1Monthly(){
-    const rows = ROWS.filter(r => L.classe[r[4]]==='CLASSE I' && monthKey(r[0])>=c1State.mesInicio && monthKey(r[0])<=c1State.mesFim);
+    const rows = ROWS.filter(r => cliOk(r) && L.classe[r[4]]==='CLASSE I' && monthKey(r[0])>=c1State.mesInicio && monthKey(r[0])<=c1State.mesFim);
     const months = monthsRangeList(c1State.mesInicio, c1State.mesFim);
     const byMonth = {}; months.forEach(m=>byMonth[m]={peso:0,count:0,pesoLiq:0,countLiq:0,pesoSolido:0});
     for(const r of rows){
@@ -1619,6 +1688,9 @@ const RAW_DATA = JSON.parse("{\"lookups\":{\"cliente\":[\"0S AMBIENTAL SPE LTDA.
     const labels = months.map(monthLabel);
     const pctSolido = months.map(m=>{ const s=byMonth[m].pesoSolido, l=byMonth[m].pesoLiq; const tot=s+l; return tot>0 ? +((s/tot)*100).toFixed(1) : 0; });
     const pctLiquido = months.map(m=>{ const s=byMonth[m].pesoSolido, l=byMonth[m].pesoLiq; const tot=s+l; return tot>0 ? +((l/tot)*100).toFixed(1) : 0; });
+    const tonSolido = months.map(m=>byMonth[m].pesoSolido);
+    const tonLiquido = months.map(m=>byMonth[m].pesoLiq);
+    const fmtTonLbl = (t) => t.toLocaleString('pt-BR', {minimumFractionDigits: t>=100?0:1, maximumFractionDigits: t>=100?0:1}) + ' t';
     destroyChart('c1pct');
     const ctx = document.getElementById('chartC1PctLiqSol');
     const pctLabelPlugin = {
@@ -1636,7 +1708,16 @@ const RAW_DATA = JSON.parse("{\"lookups\":{\"cliente\":[\"0S AMBIENTAL SPE LTDA.
             c.font = "600 11px 'IBM Plex Mono', monospace";
             c.textAlign = 'center';
             c.textBaseline = 'middle';
-            c.fillText(value.toFixed(0)+'%', x, (y+base)/2);
+            const ton = dataset.ton ? dataset.ton[i] : null;
+            const alturaSeg = Math.abs(base - y);
+            const mid = (y+base)/2;
+            if(ton != null && alturaSeg >= 30){
+              c.fillText(value.toFixed(0)+'%', x, mid - 7);
+              c.font = "500 10px 'IBM Plex Mono', monospace";
+              c.fillText(fmtTonLbl(ton), x, mid + 8);
+            } else {
+              c.fillText(value.toFixed(0)+'%', x, mid);
+            }
             c.restore();
           });
         });
@@ -1645,8 +1726,8 @@ const RAW_DATA = JSON.parse("{\"lookups\":{\"cliente\":[\"0S AMBIENTAL SPE LTDA.
     charts.c1pct = new Chart(ctx, {
       type:'bar',
       data:{ labels, datasets:[
-        {label:'Sólido', data:pctSolido, backgroundColor: cssVar('--accent-solid'), stack:'pct'},
-        {label:'Líquido', data:pctLiquido, backgroundColor: cssVar('--accent-liquid'), stack:'pct'}
+        {label:'Sólido', data:pctSolido, ton:tonSolido, backgroundColor: cssVar('--accent-solid'), stack:'pct'},
+        {label:'Líquido', data:pctLiquido, ton:tonLiquido, backgroundColor: cssVar('--accent-liquid'), stack:'pct'}
       ]},
       plugins:[pctLabelPlugin],
       options:{
@@ -1656,14 +1737,14 @@ const RAW_DATA = JSON.parse("{\"lookups\":{\"cliente\":[\"0S AMBIENTAL SPE LTDA.
           y:{stacked:true, min:0, max:100, ticks:{color:cssVar('--ink-dim'), font:{size:10}, callback:(v)=>v+'%'}, grid:{color:cssVar('--line')}}
         },
         plugins:{legend:{display:true, position:'top', align:'end', labels:{boxWidth:10, font:{size:11}, color:cssVar('--ink-dim')}},
-          tooltip:{callbacks:{label:(c)=>`${c.dataset.label}: ${c.parsed.y}%`}}}
+          tooltip:{callbacks:{label:(c)=>{ const t=c.dataset.ton?c.dataset.ton[c.dataIndex]:null; return `${c.dataset.label}: ${c.parsed.y}%`+(t!=null?` · ${fmtT(t)} t`:''); }}}}
       }
     });
   }
 
   function renderC1HoraCliente(){
     const dia = state.dia;
-    const rows = ROWS.filter(r => r[0]===dia && L.classe[r[4]]==='CLASSE I');
+    const rows = ROWS.filter(r => cliOk(r) && r[0]===dia && L.classe[r[4]]==='CLASSE I');
     document.getElementById('c1HoraClienteSub').textContent = `${fmtDateBR(dia)} · total de descartes: ${fmtInt(rows.length)}`;
     const porCliente = groupBy(rows, 2, L.cliente).sort((a,b)=>b.count-a.count);
     const {top, restN} = topN(porCliente, 6, 'count');
@@ -1727,6 +1808,86 @@ const RAW_DATA = JSON.parse("{\"lookups\":{\"cliente\":[\"0S AMBIENTAL SPE LTDA.
   }
   c1MesInicio.addEventListener('change', onC1MesChange);
   c1MesFim.addEventListener('change', onC1MesChange);
+
+  // ---------- filtro de cliente ----------
+  (function(){
+    const inp = document.getElementById('inputCliente');
+    const btn = document.getElementById('limparCliente');
+    const list = document.getElementById('listaClientes');
+    const norm = (t) => String(t).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+    const idxs = L.cliente.map((_,i)=>i).sort((a,b)=>L.cliente[a].localeCompare(L.cliente[b],'pt-BR'));
+    const searchKey = idxs.map(i=>norm(L.cliente[i]));
+    let visiveis = [];   // índices (em L.cliente) atualmente listados; -1 = "Todos os clientes"
+    let hl = -1;
+
+    function sync(){
+      inp.classList.toggle('on', state.cliente!=null);
+      btn.style.display = state.cliente!=null ? '' : 'none';
+    }
+    function fechar(){ list.hidden = true; hl = -1; }
+    function escolher(i){
+      if(i===-1){ state.cliente = null; inp.value = ''; }
+      else { state.cliente = i; inp.value = L.cliente[i]; }
+      fechar(); sync(); render();
+    }
+    function montar(filtro){
+      const q = norm(filtro||'').trim();
+      const termos = q ? q.split(/\s+/) : [];
+      visiveis = [-1];
+      for(let n=0;n<idxs.length;n++){
+        const k = searchKey[n];
+        if(termos.every(t=>k.includes(t))) visiveis.push(idxs[n]);
+      }
+      list.innerHTML = '';
+      const frag = document.createDocumentFragment();
+      visiveis.forEach((i,pos)=>{
+        const d = document.createElement('div');
+        d.className = 'cli-opt' + (i===-1 ? ' todos' : '');
+        d.dataset.pos = pos;
+        d.textContent = i===-1 ? 'Todos os clientes' : L.cliente[i];
+        frag.appendChild(d);
+      });
+      if(visiveis.length===1){
+        const inf = document.createElement('div'); inf.className='cli-info'; inf.textContent='Nenhum cliente encontrado'; frag.appendChild(inf);
+      }
+      list.appendChild(frag);
+      list.scrollTop = 0; hl = -1;
+    }
+    function abrir(filtro){ montar(filtro); list.hidden = false; }
+    function destacar(novo){
+      const opts = list.querySelectorAll('.cli-opt');
+      if(!opts.length) return;
+      if(hl>=0 && opts[hl]) opts[hl].classList.remove('hl');
+      hl = Math.max(0, Math.min(opts.length-1, novo));
+      opts[hl].classList.add('hl');
+      opts[hl].scrollIntoView({block:'nearest'});
+    }
+
+    inp.addEventListener('focus', ()=>{ inp.select(); abrir(''); });
+    inp.addEventListener('click', ()=>{ if(list.hidden) abrir(''); });
+    inp.addEventListener('input', ()=>{ abrir(inp.value); });
+    inp.addEventListener('keydown', (e)=>{
+      if(e.key==='ArrowDown'){ e.preventDefault(); if(list.hidden) abrir(inp.value); destacar(hl+1); }
+      else if(e.key==='ArrowUp'){ e.preventDefault(); destacar(hl-1); }
+      else if(e.key==='Enter'){
+        e.preventDefault();
+        if(hl>=0) escolher(visiveis[hl]);
+        else if(visiveis.length===2) escolher(visiveis[1]);
+      }
+      else if(e.key==='Escape'){ fechar(); inp.value = state.cliente!=null ? L.cliente[state.cliente] : ''; inp.blur(); }
+    });
+    // mousedown (antes do blur do input) para a seleção não se perder
+    list.addEventListener('mousedown', (e)=>{
+      e.preventDefault(); // mantém o foco no campo (também ao arrastar a barra de rolagem)
+      const o = e.target.closest('.cli-opt'); if(!o) return;
+      escolher(visiveis[Number(o.dataset.pos)]);
+    });
+    inp.addEventListener('blur', ()=>{
+      setTimeout(()=>{ fechar(); inp.value = state.cliente!=null ? L.cliente[state.cliente] : ''; }, 120);
+    });
+    btn.addEventListener('click', ()=>escolher(-1));
+    sync();
+  })();
 
   render();
 })();
